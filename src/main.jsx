@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ArrowUpRight } from 'lucide-react';
+import { GlassTilesCanvas } from './GlassTilesCanvas';
 import './styles.css';
 
 function TiltWordmark() {
@@ -249,16 +250,10 @@ function App() {
       document.documentElement.style.setProperty('--resource-lift', `${(1 - designEase) * 36 - designExit * 80}px`);
       document.documentElement.style.setProperty('--footer-opacity', footerEase);
       document.documentElement.style.setProperty('--footer-y', `${(1 - footerEase) * 96}px`);
-      resourcePanelRef.current?.querySelectorAll('.tile').forEach((tile) => {
-        const revealAt = Number(tile.dataset.reveal);
-        const removeAt = Number(tile.dataset.remove);
-        const reveal = Math.min(1, Math.max(0, (designEase - revealAt * 0.72) / 0.28));
-        const remove = Math.min(1, Math.max(0, (designExit - removeAt * 0.72) / 0.28));
-        const opacity = Number(tile.dataset.visibility) * reveal * (1 - remove);
-        const scale = 0.72 + 0.28 * reveal - 0.28 * remove;
-        tile.style.opacity = opacity;
-        tile.style.transform = `scale(${scale})`;
-      });
+      const glassContainer = resourcePanelRef.current?.querySelector('.glass-tiles-container');
+      if (glassContainer) {
+        glassContainer.dataset.revealed = designVisibility > 0.05 ? 'true' : 'false';
+      }
     };
     const rail = sectionRailRef.current;
     const sectionAt = (progress) => progress < 0.9 ? 'Home'
@@ -369,31 +364,13 @@ function App() {
           <p className="about-copy">I’m Raj, a digital designer interested in thoughtful interfaces, clear systems, and expressive visual details.</p>
           <p className="about-copy about-note">I turn ideas into useful, human experiences across mobile, dashboards, and emerging AI products.</p>
         </section>
-        <section className="resource-panel" ref={resourcePanelRef} aria-label="Design inspiration resources">
-          <div className="tile-grid" aria-hidden="true">
-            {Array.from({ length: 140 }, (_, index) => {
-              const row = Math.floor(index / 14);
-              const col = index % 14;
-              const leftGlow = Math.max(0, 1 - Math.abs(col - (3.2 + row * 0.42)) / 5.4);
-              const rightGlow = Math.max(0, 1 - Math.abs(col - (10.4 - row * 0.2)) / 3.2);
-              const vertical = Math.max(0, Math.min(1, (row - 0.1) / 5.2));
-              const seed = Math.sin((row + 1) * 127.1 + (col + 1) * 311.7) * 43758.5453;
-              const random = seed - Math.floor(seed);
-              const baseStrength = Math.max(leftGlow, rightGlow) * vertical * (0.48 + 0.52 * random);
-              const titleArea = row >= 2 && row <= 4 && col >= 1 && col <= 5 ? 0.78 : 0;
-              const bottomTextArea = row >= 6 && row <= 7 && ((col >= 1 && col <= 5) || (col >= 9 && col <= 12)) ? 0.7 : 0;
-              const strength = Math.min(0.9, Math.max(baseStrength, titleArea, bottomTextArea));
-              const revealOrder = random * 0.92 + (row + col) * 0.002;
-              const removeOrder = Math.sin((row + 1) * 269.5 + (col + 1) * 183.3) * 24634.6345;
-              const removeRandom = removeOrder - Math.floor(removeOrder);
-              return <span className="tile" data-reveal={revealOrder} data-remove={removeRandom * 0.92} data-visibility={0.22 + strength * 0.78} key={index} />;
-            })}
-          </div>
+        <section className="resource-panel" id="work" ref={resourcePanelRef} aria-label="Design inspiration resources">
+          <GlassTilesCanvas />
           <div className="resource-copy">
             <div className="resource-copy-inner">
               <div className="resource-title">
                 <h2>Design<br />Inspiration<br /><span>Websites</span></h2>
-                <p className="resource-author">©&nbsp; Vasil Enev</p>
+                <p className="resource-author">Curated by Raj</p>
               </div>
               <div className="resource-bottom">
                 <h3>GO-TO SOURCES<br />BEYOND INSTAGRAM</h3>
@@ -417,7 +394,17 @@ function App() {
           </div>
         </footer>
       </section>
-      <a className="corner-link" href="#work" aria-label="View selected work"><ArrowUpRight size={16} /></a>
+      <a
+        className="corner-link"
+        href="#work"
+        aria-label="View design resources"
+        onClick={(e) => {
+          e.preventDefault();
+          window.scrollTo({ top: 2 * window.innerHeight, behavior: 'smooth' });
+        }}
+      >
+        <ArrowUpRight size={16} />
+      </a>
     </main>
   );
 }
