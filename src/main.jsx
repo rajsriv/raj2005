@@ -205,77 +205,55 @@ function TiltWordmark() {
 }
 
 function App() {
-  const resourcePanelRef = useRef(null);
   const sectionRailRef = useRef(null);
+
   useEffect(() => {
-    let frame = 0;
-    const updateProgress = () => {
-      frame = 0;
-      const pageProgress = Math.min(3, Math.max(0, window.scrollY / Math.max(1, window.innerHeight)));
-      const progress = Math.min(1, pageProgress);
-      const currentSection = pageProgress < 0.75 ? 'Home'
-        : pageProgress < 1.45 ? 'About me'
-          : pageProgress < 2.35 ? 'Design resources' : 'Footer';
-      const rail = sectionRailRef.current;
-      if (rail) {
-        if (rail.dataset.interacting !== 'true') {
-          rail.setAttribute('aria-label', `Current section: ${currentSection}`);
-          rail.style.setProperty('--rail-label-y', `${rail.clientHeight * pageProgress / 3}px`);
-          const label = rail.querySelector('.rail-section-name');
-          if (label) label.textContent = currentSection;
-        }
-        const activeTick = pageProgress < 0.75 ? 0 : pageProgress < 1.45 ? 1 : pageProgress < 2.35 ? 2 : 3;
-        rail.querySelectorAll('.rail-tick').forEach((tick, index) => {
-          tick.classList.toggle('is-active', index === activeTick);
-          if (index === activeTick) tick.setAttribute('aria-current', 'location');
-          else tick.removeAttribute('aria-current');
-        });
-      }
-      document.documentElement.style.setProperty('--scroll-progress', progress);
-      
-      // About me reveals as hero fades, then exits smoothly as Design Resources arrives
-      const aboutProgress = Math.min(1, Math.max(0, (pageProgress - 0.7) / 0.25));
-      const aboutEase = aboutProgress * aboutProgress * (3 - 2 * aboutProgress);
-      const aboutExitProgress = Math.min(1, Math.max(0, (pageProgress - 1.25) / 0.25));
-      const aboutExit = aboutExitProgress * aboutExitProgress * (3 - 2 * aboutExitProgress);
-
-      // Design resources: starts right below About Me (pageProgress ~1.15 to 1.35)
-      const designProgress = Math.min(1, Math.max(0, (pageProgress - 1.15) / 0.25));
-      const designEase = designProgress * designProgress * (3 - 2 * designProgress);
-      const designExitProgress = Math.min(1, Math.max(0, (pageProgress - 2.05) / 0.3));
-      const designExit = designExitProgress * designExitProgress * (3 - 2 * designExitProgress);
-      const designVisibility = designEase * (1 - designExit);
-
-      // Footer arrives directly after Design Resources
-      const footerProgress = Math.min(1, Math.max(0, (pageProgress - 2.15) / 0.3));
-      const footerEase = footerProgress * footerProgress * (3 - 2 * footerProgress);
-
-      document.documentElement.style.setProperty('--about-opacity', aboutEase * (1 - aboutExit));
-      document.documentElement.style.setProperty('--about-y', `${(1 - aboutEase) * 20 - aboutExit * 20}px`);
-      document.documentElement.style.setProperty('--design-opacity', designVisibility);
-      document.documentElement.style.setProperty('--design-y', `${(1 - designEase) * 32 - designExit * 32}px`);
-      document.documentElement.style.setProperty('--resource-lift', `${(1 - designEase) * 24 - designExit * 40}px`);
-      document.documentElement.style.setProperty('--footer-opacity', footerEase);
-      document.documentElement.style.setProperty('--footer-y', `${(1 - footerEase) * 48}px`);
-      const glassContainer = resourcePanelRef.current?.querySelector('.glass-tiles-container');
-      if (glassContainer) {
-        glassContainer.dataset.revealed = designVisibility > 0.05 ? 'true' : 'false';
-      }
-    };
     const rail = sectionRailRef.current;
-    const sectionAt = (progress) => progress < 0.75 ? 'Home'
-      : progress < 1.45 ? 'About me'
-        : progress < 2.35 ? 'Design resources' : 'Footer';
+    if (!rail) return;
+
+    const sections = ['hero', 'about', 'work', 'footer'];
+    const sectionElements = sections.map((id) => document.getElementById(id));
+
+    const updateActiveSection = () => {
+      const scrollY = window.scrollY;
+      const windowHeight = window.innerHeight;
+      
+      let currentIdx = 0;
+      sectionElements.forEach((el, index) => {
+        if (!el) return;
+        const rect = el.getBoundingClientRect();
+        // If element is in middle of viewport
+        if (rect.top <= windowHeight * 0.45) {
+          currentIdx = index;
+        }
+      });
+
+      const sectionNames = ['Home', 'About me', 'Design resources', 'Footer'];
+      const activeName = sectionNames[currentIdx];
+
+      if (rail.dataset.interacting !== 'true') {
+        rail.setAttribute('aria-label', `Current section: ${activeName}`);
+        rail.style.setProperty('--rail-label-y', `${(rail.clientHeight * currentIdx) / (sections.length - 1)}px`);
+        const label = rail.querySelector('.rail-section-name');
+        if (label) label.textContent = activeName;
+      }
+
+      rail.querySelectorAll('.rail-tick').forEach((tick, index) => {
+        tick.classList.toggle('is-active', index === currentIdx);
+        if (index === currentIdx) tick.setAttribute('aria-current', 'location');
+        else tick.removeAttribute('aria-current');
+      });
+    };
+
     const interactAt = (index) => {
-      if (!rail) return;
       const ticks = [...rail.querySelectorAll('.rail-tick')];
       const clampedIndex = Math.max(0, Math.min(ticks.length - 1, index));
       rail.dataset.interacting = 'true';
-      const tickProgress = clampedIndex / Math.max(1, ticks.length - 1) * 3;
-      const label = rail.querySelector('.rail-section-name');
-      const section = sectionAt(tickProgress);
+      const sectionNames = ['Home', 'About me', 'Design resources', 'Footer'];
+      const section = sectionNames[clampedIndex];
       rail.setAttribute('aria-label', `Section: ${section}`);
-      rail.style.setProperty('--rail-label-y', `${rail.clientHeight * clampedIndex / Math.max(1, ticks.length - 1)}px`);
+      rail.style.setProperty('--rail-label-y', `${(rail.clientHeight * clampedIndex) / (ticks.length - 1)}px`);
+      const label = rail.querySelector('.rail-section-name');
       if (label) label.textContent = section;
       ticks.forEach((tick, tickIndex) => {
         const distance = Math.abs(tickIndex - clampedIndex);
@@ -284,62 +262,46 @@ function App() {
         tick.classList.toggle('is-far', distance === 2);
       });
     };
+
     const onRailPointerMove = (event) => {
       rail.dataset.clicked = 'false';
       const rect = rail.getBoundingClientRect();
       const ratio = Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height));
-      interactAt(Math.round(ratio * 3));
+      interactAt(Math.round(ratio * (sections.length - 1)));
     };
+
     const clearRailInteraction = () => {
       if (rail.contains(document.activeElement) && document.activeElement.classList.contains('rail-tick')) return;
       rail.dataset.interacting = 'false';
       rail.querySelectorAll('.rail-tick').forEach((tick) => tick.classList.remove('is-hovered', 'is-near', 'is-far'));
-      updateProgress();
+      updateActiveSection();
     };
-    const onRailFocus = (event) => {
-      rail.dataset.clicked = 'false';
-      const focusedTick = event.target.closest('.rail-tick');
-      if (focusedTick) {
-        interactAt(Number(focusedTick.dataset.sectionIndex));
-        return;
-      }
-      const progress = Math.min(3, Math.max(0, window.scrollY / Math.max(1, window.innerHeight)));
-      const activeSection = progress < 0.75 ? 0 : progress < 1.45 ? 1 : progress < 2.35 ? 2 : 3;
-      interactAt(activeSection);
-    };
+
     const onRailClick = (event) => {
       const clickedTick = event.target.closest('.rail-tick');
       if (!clickedTick) return;
-      const sectionStops = [0, 0.95, 1.6, 2.5];
       const sectionIndex = Number(clickedTick.dataset.sectionIndex);
       rail.dataset.clicked = 'true';
       clickedTick.blur();
       clearRailInteraction();
-      window.scrollTo({ top: sectionStops[sectionIndex] * window.innerHeight, behavior: 'smooth' });
+      const targetEl = sectionElements[sectionIndex];
+      if (targetEl) {
+        targetEl.scrollIntoView({ behavior: 'smooth' });
+      }
     };
-    const onRailFocusOut = (event) => {
-      if (event.relatedTarget && rail.contains(event.relatedTarget)) return;
-      clearRailInteraction();
-    };
-    const onScroll = () => {
-      if (!frame) frame = requestAnimationFrame(updateProgress);
-    };
-    updateProgress();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('resize', onScroll);
+
+    updateActiveSection();
+    window.addEventListener('scroll', updateActiveSection, { passive: true });
+    window.addEventListener('resize', updateActiveSection);
     rail.addEventListener('pointermove', onRailPointerMove);
     rail.addEventListener('pointerleave', clearRailInteraction);
-    rail.addEventListener('focusin', onRailFocus);
-    rail.addEventListener('focusout', onRailFocusOut);
     rail.addEventListener('click', onRailClick);
+
     return () => {
-      if (frame) cancelAnimationFrame(frame);
-      window.removeEventListener('scroll', onScroll);
-      window.removeEventListener('resize', onScroll);
+      window.removeEventListener('scroll', updateActiveSection);
+      window.removeEventListener('resize', updateActiveSection);
       rail.removeEventListener('pointermove', onRailPointerMove);
       rail.removeEventListener('pointerleave', clearRailInteraction);
-      rail.removeEventListener('focusin', onRailFocus);
-      rail.removeEventListener('focusout', onRailFocusOut);
       rail.removeEventListener('click', onRailClick);
     };
   }, []);
@@ -361,53 +323,64 @@ function App() {
           <span>Current section</span>
         </div>
       </nav>
-      <section className="hero" aria-label="Portfolio introduction">
+
+      {/* 1. Hero Wordmark Section */}
+      <section className="hero-section" id="hero" aria-label="Portfolio introduction">
         <div className="wordmark-wrap">
           <TiltWordmark />
         </div>
-        <section className="about-panel" aria-label="About Raj">
-          <p className="about-eyebrow">A LITTLE ABOUT ME</p>
-          <h2>Designing with curiosity and care.</h2>
-          <p className="about-copy">I’m Raj, a digital designer interested in thoughtful interfaces, clear systems, and expressive visual details.</p>
-          <p className="about-copy about-note">I turn ideas into useful, human experiences across mobile, dashboards, and emerging AI products.</p>
-        </section>
-        <section className="resource-panel" id="work" ref={resourcePanelRef} aria-label="Design inspiration resources">
-          <GlassTilesCanvas />
-          <div className="resource-copy">
-            <div className="resource-copy-inner">
-              <div className="resource-title">
-                <h2>Design<br />Inspiration<br /><span>Websites</span></h2>
-                <p className="resource-author">Curated by Raj</p>
-              </div>
-              <div className="resource-bottom">
-                <h3>GO-TO SOURCES<br />BEYOND INSTAGRAM</h3>
-                <p className="save-copy">SAVE IT<br />FOR LATER</p>
-              </div>
-              <div className="resource-footer">
-                <strong>DESIGN<br />RESOURCES</strong>
-                <strong>2025<br />JULY</strong>
-                <span className="bookmark" aria-hidden="true" />
-              </div>
+      </section>
+
+      {/* 2. About Me Section - Natural Stacked Flow */}
+      <section className="about-panel" id="about" aria-label="About Raj">
+        <p className="about-eyebrow">A LITTLE ABOUT ME</p>
+        <h2>Designing with curiosity and care.</h2>
+        <p className="about-copy">I’m Raj, a digital designer interested in thoughtful interfaces, clear systems, and expressive visual details.</p>
+        <p className="about-copy about-note">I turn ideas into useful, human experiences across mobile, dashboards, and emerging AI products.</p>
+      </section>
+
+      {/* 3. Design Resources (Radial Horizon) - Lies Naturally Stacked Below About Me */}
+      <section className="resource-panel" id="work" aria-label="Design inspiration resources">
+        <GlassTilesCanvas />
+        <div className="resource-copy">
+          <div className="resource-copy-inner">
+            <div className="resource-title">
+              <h2>Design<br />Inspiration<br /><span>Websites</span></h2>
+              <p className="resource-author">Curated by Raj</p>
+            </div>
+            <div className="resource-bottom">
+              <h3>GO-TO SOURCES<br />BEYOND INSTAGRAM</h3>
+              <p className="save-copy">SAVE IT<br />FOR LATER</p>
+            </div>
+            <div className="resource-footer">
+              <strong>DESIGN<br />RESOURCES</strong>
+              <strong>2026<br />JULY</strong>
+              <span className="bookmark" aria-hidden="true" />
             </div>
           </div>
-        </section>
-        <footer className="footer-panel">
-          <p className="footer-eyebrow">RAJ · DIGITAL DESIGNER</p>
-          <h2>Thanks for stopping by.</h2>
-          <div className="footer-bottom">
-            <p>Thoughtful interfaces. Expressive details.<br />Made with curiosity and care.</p>
-            <a href="#top">BACK TO TOP <ArrowUpRight size={14} /></a>
-            <span>© 2026 RAJ</span>
-          </div>
-        </footer>
+        </div>
       </section>
+
+      {/* 4. Footer Section */}
+      <footer className="footer-panel" id="footer">
+        <p className="footer-eyebrow">RAJ · DIGITAL DESIGNER</p>
+        <h2>Thanks for stopping by.</h2>
+        <div className="footer-bottom">
+          <p>Thoughtful interfaces. Expressive details.<br />Made with curiosity and care.</p>
+          <a href="#top" onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>
+            BACK TO TOP <ArrowUpRight size={14} />
+          </a>
+          <span>© 2026 RAJ</span>
+        </div>
+      </footer>
+
       <a
         className="corner-link"
         href="#work"
         aria-label="View design resources"
         onClick={(e) => {
           e.preventDefault();
-          window.scrollTo({ top: 1.6 * window.innerHeight, behavior: 'smooth' });
+          document.getElementById('work')?.scrollIntoView({ behavior: 'smooth' });
         }}
       >
         <ArrowUpRight size={16} />
