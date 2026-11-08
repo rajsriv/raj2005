@@ -211,20 +211,20 @@ function App() {
     let frame = 0;
     const updateProgress = () => {
       frame = 0;
-      const pageProgress = Math.min(4, Math.max(0, window.scrollY / Math.max(1, window.innerHeight)));
+      const pageProgress = Math.min(3, Math.max(0, window.scrollY / Math.max(1, window.innerHeight)));
       const progress = Math.min(1, pageProgress);
-      const currentSection = pageProgress < 0.9 ? 'Home'
-        : pageProgress < 1.65 ? 'About me'
-          : pageProgress < 3.05 ? 'Design resources' : 'Footer';
+      const currentSection = pageProgress < 0.75 ? 'Home'
+        : pageProgress < 1.45 ? 'About me'
+          : pageProgress < 2.35 ? 'Design resources' : 'Footer';
       const rail = sectionRailRef.current;
       if (rail) {
         if (rail.dataset.interacting !== 'true') {
           rail.setAttribute('aria-label', `Current section: ${currentSection}`);
-          rail.style.setProperty('--rail-label-y', `${rail.clientHeight * pageProgress / 4}px`);
+          rail.style.setProperty('--rail-label-y', `${rail.clientHeight * pageProgress / 3}px`);
           const label = rail.querySelector('.rail-section-name');
           if (label) label.textContent = currentSection;
         }
-        const activeTick = pageProgress < 0.9 ? 0 : pageProgress < 1.65 ? 1 : pageProgress < 3.05 ? 2 : 3;
+        const activeTick = pageProgress < 0.75 ? 0 : pageProgress < 1.45 ? 1 : pageProgress < 2.35 ? 2 : 3;
         rail.querySelectorAll('.rail-tick').forEach((tick, index) => {
           tick.classList.toggle('is-active', index === activeTick);
           if (index === activeTick) tick.setAttribute('aria-current', 'location');
@@ -232,39 +232,46 @@ function App() {
         });
       }
       document.documentElement.style.setProperty('--scroll-progress', progress);
-      const aboutProgress = Math.min(1, Math.max(0, (progress - 0.9) / 0.1));
+      
+      // About me reveals as hero fades, then exits smoothly as Design Resources arrives
+      const aboutProgress = Math.min(1, Math.max(0, (pageProgress - 0.7) / 0.25));
       const aboutEase = aboutProgress * aboutProgress * (3 - 2 * aboutProgress);
-      const aboutExitProgress = Math.min(1, Math.max(0, (pageProgress - 1.65) / 0.35));
+      const aboutExitProgress = Math.min(1, Math.max(0, (pageProgress - 1.25) / 0.25));
       const aboutExit = aboutExitProgress * aboutExitProgress * (3 - 2 * aboutExitProgress);
-      const designProgress = Math.min(1, Math.max(0, (pageProgress - 1.65) / 0.35));
+
+      // Design resources: starts right below About Me (pageProgress ~1.15 to 1.35)
+      const designProgress = Math.min(1, Math.max(0, (pageProgress - 1.15) / 0.25));
       const designEase = designProgress * designProgress * (3 - 2 * designProgress);
-      const designExitProgress = Math.min(1, Math.max(0, (pageProgress - 2.1) / 0.75));
+      const designExitProgress = Math.min(1, Math.max(0, (pageProgress - 2.05) / 0.3));
       const designExit = designExitProgress * designExitProgress * (3 - 2 * designExitProgress);
-      const designVisibility = designEase * (1 - Math.min(1, Math.max(0, (pageProgress - 2.85) / 0.15)));
-      const footerProgress = Math.min(1, Math.max(0, (pageProgress - 3.05) / 0.35));
+      const designVisibility = designEase * (1 - designExit);
+
+      // Footer arrives directly after Design Resources
+      const footerProgress = Math.min(1, Math.max(0, (pageProgress - 2.15) / 0.3));
       const footerEase = footerProgress * footerProgress * (3 - 2 * footerProgress);
+
       document.documentElement.style.setProperty('--about-opacity', aboutEase * (1 - aboutExit));
-      document.documentElement.style.setProperty('--about-y', `${(1 - aboutEase) * 24}px`);
+      document.documentElement.style.setProperty('--about-y', `${(1 - aboutEase) * 20 - aboutExit * 20}px`);
       document.documentElement.style.setProperty('--design-opacity', designVisibility);
-      document.documentElement.style.setProperty('--design-y', `${(1 - designEase) * 28}px`);
-      document.documentElement.style.setProperty('--resource-lift', `${(1 - designEase) * 36 - designExit * 80}px`);
+      document.documentElement.style.setProperty('--design-y', `${(1 - designEase) * 32 - designExit * 32}px`);
+      document.documentElement.style.setProperty('--resource-lift', `${(1 - designEase) * 24 - designExit * 40}px`);
       document.documentElement.style.setProperty('--footer-opacity', footerEase);
-      document.documentElement.style.setProperty('--footer-y', `${(1 - footerEase) * 96}px`);
+      document.documentElement.style.setProperty('--footer-y', `${(1 - footerEase) * 48}px`);
       const glassContainer = resourcePanelRef.current?.querySelector('.glass-tiles-container');
       if (glassContainer) {
         glassContainer.dataset.revealed = designVisibility > 0.05 ? 'true' : 'false';
       }
     };
     const rail = sectionRailRef.current;
-    const sectionAt = (progress) => progress < 0.9 ? 'Home'
-      : progress < 1.65 ? 'About me'
-        : progress < 3.05 ? 'Design resources' : 'Footer';
+    const sectionAt = (progress) => progress < 0.75 ? 'Home'
+      : progress < 1.45 ? 'About me'
+        : progress < 2.35 ? 'Design resources' : 'Footer';
     const interactAt = (index) => {
       if (!rail) return;
       const ticks = [...rail.querySelectorAll('.rail-tick')];
       const clampedIndex = Math.max(0, Math.min(ticks.length - 1, index));
       rail.dataset.interacting = 'true';
-      const tickProgress = clampedIndex / Math.max(1, ticks.length - 1) * 4;
+      const tickProgress = clampedIndex / Math.max(1, ticks.length - 1) * 3;
       const label = rail.querySelector('.rail-section-name');
       const section = sectionAt(tickProgress);
       rail.setAttribute('aria-label', `Section: ${section}`);
@@ -296,14 +303,14 @@ function App() {
         interactAt(Number(focusedTick.dataset.sectionIndex));
         return;
       }
-      const progress = Math.min(4, Math.max(0, window.scrollY / Math.max(1, window.innerHeight)));
-      const activeSection = progress < 0.9 ? 0 : progress < 1.65 ? 1 : progress < 3.05 ? 2 : 3;
+      const progress = Math.min(3, Math.max(0, window.scrollY / Math.max(1, window.innerHeight)));
+      const activeSection = progress < 0.75 ? 0 : progress < 1.45 ? 1 : progress < 2.35 ? 2 : 3;
       interactAt(activeSection);
     };
     const onRailClick = (event) => {
       const clickedTick = event.target.closest('.rail-tick');
       if (!clickedTick) return;
-      const sectionStops = [0, 1, 2, 3.4];
+      const sectionStops = [0, 0.95, 1.6, 2.5];
       const sectionIndex = Number(clickedTick.dataset.sectionIndex);
       rail.dataset.clicked = 'true';
       clickedTick.blur();
@@ -400,7 +407,7 @@ function App() {
         aria-label="View design resources"
         onClick={(e) => {
           e.preventDefault();
-          window.scrollTo({ top: 2 * window.innerHeight, behavior: 'smooth' });
+          window.scrollTo({ top: 1.6 * window.innerHeight, behavior: 'smooth' });
         }}
       >
         <ArrowUpRight size={16} />
