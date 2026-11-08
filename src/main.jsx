@@ -205,12 +205,31 @@ function TiltWordmark() {
 
 function App() {
   const resourcePanelRef = useRef(null);
+  const sectionRailRef = useRef(null);
   useEffect(() => {
     let frame = 0;
     const updateProgress = () => {
       frame = 0;
       const pageProgress = Math.min(4, Math.max(0, window.scrollY / Math.max(1, window.innerHeight)));
       const progress = Math.min(1, pageProgress);
+      const currentSection = pageProgress < 0.9 ? 'Home'
+        : pageProgress < 1.65 ? 'About me'
+          : pageProgress < 3.05 ? 'Design resources' : 'Footer';
+      const rail = sectionRailRef.current;
+      if (rail) {
+        if (rail.dataset.interacting !== 'true') {
+          rail.setAttribute('aria-label', `Current section: ${currentSection}`);
+          rail.style.setProperty('--rail-label-y', `${rail.clientHeight * pageProgress / 4}px`);
+          const label = rail.querySelector('.rail-section-name');
+          if (label) label.textContent = currentSection;
+        }
+        const activeTick = pageProgress < 0.9 ? 0 : pageProgress < 1.65 ? 1 : pageProgress < 3.05 ? 2 : 3;
+        rail.querySelectorAll('.rail-tick').forEach((tick, index) => {
+          tick.classList.toggle('is-active', index === activeTick);
+          if (index === activeTick) tick.setAttribute('aria-current', 'location');
+          else tick.removeAttribute('aria-current');
+        });
+      }
       document.documentElement.style.setProperty('--scroll-progress', progress);
       const aboutProgress = Math.min(1, Math.max(0, (progress - 0.9) / 0.1));
       const aboutEase = aboutProgress * aboutProgress * (3 - 2 * aboutProgress);
@@ -230,7 +249,75 @@ function App() {
       document.documentElement.style.setProperty('--resource-lift', `${(1 - designEase) * 36 - designExit * 80}px`);
       document.documentElement.style.setProperty('--footer-opacity', footerEase);
       document.documentElement.style.setProperty('--footer-y', `${(1 - footerEase) * 96}px`);
-      resourcePanelRef.current?.setAttribute('data-tiles-active', designEase > 0.02 && designExit < 0.01 ? 'true' : 'false');
+      resourcePanelRef.current?.querySelectorAll('.tile').forEach((tile) => {
+        const revealAt = Number(tile.dataset.reveal);
+        const removeAt = Number(tile.dataset.remove);
+        const reveal = Math.min(1, Math.max(0, (designEase - revealAt * 0.72) / 0.28));
+        const remove = Math.min(1, Math.max(0, (designExit - removeAt * 0.72) / 0.28));
+        const opacity = Number(tile.dataset.visibility) * reveal * (1 - remove);
+        const scale = 0.72 + 0.28 * reveal - 0.28 * remove;
+        tile.style.opacity = opacity;
+        tile.style.transform = `scale(${scale})`;
+      });
+    };
+    const rail = sectionRailRef.current;
+    const sectionAt = (progress) => progress < 0.9 ? 'Home'
+      : progress < 1.65 ? 'About me'
+        : progress < 3.05 ? 'Design resources' : 'Footer';
+    const interactAt = (index) => {
+      if (!rail) return;
+      const ticks = [...rail.querySelectorAll('.rail-tick')];
+      const clampedIndex = Math.max(0, Math.min(ticks.length - 1, index));
+      rail.dataset.interacting = 'true';
+      const tickProgress = clampedIndex / Math.max(1, ticks.length - 1) * 4;
+      const label = rail.querySelector('.rail-section-name');
+      const section = sectionAt(tickProgress);
+      rail.setAttribute('aria-label', `Section: ${section}`);
+      rail.style.setProperty('--rail-label-y', `${rail.clientHeight * clampedIndex / Math.max(1, ticks.length - 1)}px`);
+      if (label) label.textContent = section;
+      ticks.forEach((tick, tickIndex) => {
+        const distance = Math.abs(tickIndex - clampedIndex);
+        tick.classList.toggle('is-hovered', distance === 0);
+        tick.classList.toggle('is-near', distance === 1);
+        tick.classList.toggle('is-far', distance === 2);
+      });
+    };
+    const onRailPointerMove = (event) => {
+      rail.dataset.clicked = 'false';
+      const rect = rail.getBoundingClientRect();
+      const ratio = Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height));
+      interactAt(Math.round(ratio * 3));
+    };
+    const clearRailInteraction = () => {
+      if (rail.contains(document.activeElement) && document.activeElement.classList.contains('rail-tick')) return;
+      rail.dataset.interacting = 'false';
+      rail.querySelectorAll('.rail-tick').forEach((tick) => tick.classList.remove('is-hovered', 'is-near', 'is-far'));
+      updateProgress();
+    };
+    const onRailFocus = (event) => {
+      rail.dataset.clicked = 'false';
+      const focusedTick = event.target.closest('.rail-tick');
+      if (focusedTick) {
+        interactAt(Number(focusedTick.dataset.sectionIndex));
+        return;
+      }
+      const progress = Math.min(4, Math.max(0, window.scrollY / Math.max(1, window.innerHeight)));
+      const activeSection = progress < 0.9 ? 0 : progress < 1.65 ? 1 : progress < 3.05 ? 2 : 3;
+      interactAt(activeSection);
+    };
+    const onRailClick = (event) => {
+      const clickedTick = event.target.closest('.rail-tick');
+      if (!clickedTick) return;
+      const sectionStops = [0, 1, 2, 3.4];
+      const sectionIndex = Number(clickedTick.dataset.sectionIndex);
+      rail.dataset.clicked = 'true';
+      clickedTick.blur();
+      clearRailInteraction();
+      window.scrollTo({ top: sectionStops[sectionIndex] * window.innerHeight, behavior: 'smooth' });
+    };
+    const onRailFocusOut = (event) => {
+      if (event.relatedTarget && rail.contains(event.relatedTarget)) return;
+      clearRailInteraction();
     };
     const onScroll = () => {
       if (!frame) frame = requestAnimationFrame(updateProgress);
@@ -238,10 +325,20 @@ function App() {
     updateProgress();
     window.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('resize', onScroll);
+    rail.addEventListener('pointermove', onRailPointerMove);
+    rail.addEventListener('pointerleave', clearRailInteraction);
+    rail.addEventListener('focusin', onRailFocus);
+    rail.addEventListener('focusout', onRailFocusOut);
+    rail.addEventListener('click', onRailClick);
     return () => {
       if (frame) cancelAnimationFrame(frame);
       window.removeEventListener('scroll', onScroll);
       window.removeEventListener('resize', onScroll);
+      rail.removeEventListener('pointermove', onRailPointerMove);
+      rail.removeEventListener('pointerleave', clearRailInteraction);
+      rail.removeEventListener('focusin', onRailFocus);
+      rail.removeEventListener('focusout', onRailFocusOut);
+      rail.removeEventListener('click', onRailClick);
     };
   }, []);
 
@@ -251,6 +348,17 @@ function App() {
       <div className="wash wash-coral" />
       <div className="wash wash-amber" />
       <div className="wash wash-lilac" />
+      <nav className="section-rail" ref={sectionRailRef} aria-label="Section navigation">
+        <div className="rail-ticks">
+          {['Home', 'About me', 'Design resources', 'Footer'].map((section, index) => (
+            <button className="rail-tick" data-section-index={index} aria-label={`Go to ${section}`} key={section} />
+          ))}
+        </div>
+        <div className="rail-tooltip" aria-hidden="true">
+          <strong className="rail-section-name">Home</strong>
+          <span>Current section</span>
+        </div>
+      </nav>
       <section className="hero" aria-label="Portfolio introduction">
         <div className="wordmark-wrap">
           <TiltWordmark />
@@ -275,8 +383,10 @@ function App() {
               const titleArea = row >= 2 && row <= 4 && col >= 1 && col <= 5 ? 0.78 : 0;
               const bottomTextArea = row >= 6 && row <= 7 && ((col >= 1 && col <= 5) || (col >= 9 && col <= 12)) ? 0.7 : 0;
               const strength = Math.min(0.9, Math.max(baseStrength, titleArea, bottomTextArea));
-              const delay = (random * 0.72 + (row + col) * 0.006).toFixed(2);
-              return <span className="tile" key={index} style={{ '--tile-alpha': strength, '--tile-visibility': 0.22 + strength * 0.78, '--tile-delay': `${delay}s` }} />;
+              const revealOrder = random * 0.92 + (row + col) * 0.002;
+              const removeOrder = Math.sin((row + 1) * 269.5 + (col + 1) * 183.3) * 24634.6345;
+              const removeRandom = removeOrder - Math.floor(removeOrder);
+              return <span className="tile" data-reveal={revealOrder} data-remove={removeRandom * 0.92} data-visibility={0.22 + strength * 0.78} key={index} />;
             })}
           </div>
           <div className="resource-copy">
