@@ -18,8 +18,8 @@ export function GlassTilesCanvas() {
 
     let dpr = Math.min(window.devicePixelRatio || 1, 2);
 
-    // Fullscreen quad with smooth Radial Horizon shader
-    // Inverted/Flipped: bottom black/deep navy -> middle electric royal blue -> top clean luminous white
+    // Continuous Planetary Horizon Gradient Shader
+    // Ultra-seamless, infinite-blend transition from obsidian black to vibrant cobalt/electric royal blue to atmospheric sky and white
     const quadGeom = new THREE.PlaneGeometry(2, 2);
     const horizonMat = new THREE.ShaderMaterial({
       uniforms: {
@@ -40,60 +40,52 @@ export function GlassTilesCanvas() {
         uniform vec2 uMouse;
         varying vec2 vUv;
 
-        // Smooth cubic Hermite interpolation
-        float easeInOut(float t) {
-          return t * t * (3.0 - 2.0 * t);
-        }
-
+        // Smooth cosine-based multi-stop gradient without piecewise if/else hard seams
         void main() {
           vec2 uv = vUv;
           
-          // Subtle breathing shift
-          float t = uTime * 0.25;
-          float breath = sin(t) * 0.015;
+          // Subtle organic tidal breathing
+          float t = uTime * 0.2;
+          float breath = sin(t) * 0.02;
 
-          // Horizon center origin at bottom center (flipped from top arc)
-          // Curved planetary radial horizon lifting from the bottom
-          vec2 origin = vec2(0.5 + (uMouse.x - 0.5) * 0.06, -0.32 + breath);
+          // Planetary horizon center lowered far beneath the bottom edge
+          // Placing the center at y = -0.55 creates a wide, sweeping celestial planetary curve (like Earth's limb from space)
+          vec2 origin = vec2(0.5 + (uMouse.x - 0.5) * 0.05, -0.55 + breath);
           
-          // Aspect ratio correction for an expansive elliptical dome/horizon
           float aspect = uResolution.x / max(1.0, uResolution.y);
           vec2 p = uv - origin;
-          p.x *= aspect * 0.62; // Wider elliptical curvature
+          p.x *= aspect * 0.45; // Broad sweeping elliptical horizon curve
           
+          // Normalized radial distance from planet center upwards
           float dist = length(p);
 
-          // Deep spectrum matching reference flipped:
-          // 0.0: Bottom core - Pure obsidian black / midnight
-          // 0.35: Deepest midnight indigo
-          // 0.62: Electric cobalt & vivid royal blue
-          // 0.82: Atmospheric sky cyan / soft cerulean
-          // 1.0+: Pristine luminous white
-          vec3 cBlack    = vec3(0.005, 0.008, 0.022);   // Deep obsidian black
-          vec3 cMidnight = vec3(0.03, 0.06, 0.36);      // Darkest midnight blue
-          vec3 cCobalt   = vec3(0.06, 0.22, 0.88);      // Electric cobalt / vibrant royal blue
-          vec3 cSky      = vec3(0.56, 0.78, 0.98);      // Atmospheric cyan / cerulean
-          vec3 cWhite    = vec3(0.98, 0.99, 1.0);       // Crisp white
+          // Map radial distance into a continuous 0.0 -> 1.0 parameter
+          // Dist spans smoothly from bottom core (~0.45) to top of viewport (~1.65)
+          float s = clamp((dist - 0.46) / 1.14, 0.0, 1.0);
 
-          // Smooth curved radial color bands
-          vec3 col;
-          if (dist < 0.42) {
-            float f = smoothstep(0.0, 0.42, dist);
-            col = mix(cBlack, cMidnight, easeInOut(f));
-          } else if (dist < 0.72) {
-            float f = smoothstep(0.42, 0.72, dist);
-            col = mix(cMidnight, cCobalt, easeInOut(f));
-          } else if (dist < 0.98) {
-            float f = smoothstep(0.72, 0.98, dist);
-            col = mix(cCobalt, cSky, easeInOut(f));
-          } else {
-            float f = smoothstep(0.98, 1.32, dist);
-            col = mix(cSky, cWhite, easeInOut(f));
-          }
+          // Rich color anchors matching the celestial planetary horizon:
+          vec3 cBlack    = vec3(0.004, 0.008, 0.024);   // Deep space obsidian black
+          vec3 cNavy     = vec3(0.015, 0.05, 0.38);     // Midnight twilight blue
+          vec3 cElectric = vec3(0.04, 0.24, 0.94);      // Saturated royal / electric cobalt blue
+          vec3 cSky      = vec3(0.52, 0.76, 0.98);      // Atmospheric cyan / sky blue
+          vec3 cWhite    = vec3(0.98, 0.99, 1.0);       // Pure crisp white atmosphere
 
-          // Subtle analog dithering to prevent any 8-bit banding across the ultra-soft gradient
-          float dither = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) - 0.5;
-          col += (dither / 255.0) * 1.8;
+          // 100% continuous multi-term polynomial / smooth hermite blending
+          // Completely eliminates piecewise 'step' boundaries or bands
+          float w1 = smoothstep(0.00, 0.38, s);
+          float w2 = smoothstep(0.20, 0.65, s);
+          float w3 = smoothstep(0.50, 0.88, s);
+          float w4 = smoothstep(0.72, 1.00, s);
+
+          vec3 col = cBlack;
+          col = mix(col, cNavy,     w1);
+          col = mix(col, cElectric, w2);
+          col = mix(col, cSky,      w3);
+          col = mix(col, cWhite,    w4);
+
+          // High-frequency triangular dither to completely eradicate all 8-bit gradient banding
+          float noise = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
+          col += (noise - 0.5) * (1.5 / 255.0);
 
           gl_FragColor = vec4(col, 1.0);
         }
@@ -103,7 +95,6 @@ export function GlassTilesCanvas() {
     const quad = new THREE.Mesh(quadGeom, horizonMat);
     scene.add(quad);
 
-    // Mouse tracking for subtle parallax perspective
     const mouse = { x: 0.5, y: 0.0, targetX: 0.5, targetY: 0.0 };
     const onPointerMove = (e) => {
       const rect = container.getBoundingClientRect();
@@ -119,8 +110,8 @@ export function GlassTilesCanvas() {
       animationFrameId = requestAnimationFrame(animate);
       const elapsedTime = clock.getElapsedTime();
 
-      mouse.x += (mouse.targetX - mouse.x) * 0.05;
-      mouse.y += (mouse.targetY - mouse.y) * 0.05;
+      mouse.x += (mouse.targetX - mouse.x) * 0.04;
+      mouse.y += (mouse.targetY - mouse.y) * 0.04;
 
       horizonMat.uniforms.uTime.value = elapsedTime;
       horizonMat.uniforms.uMouse.value.set(mouse.x, mouse.y);
