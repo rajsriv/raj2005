@@ -206,27 +206,49 @@ function TiltWordmark() {
 
 function App() {
   const sectionRailRef = useRef(null);
+  const SECTIONS = ['Home', 'About me', 'Design resources', 'Footer'];
+
   useEffect(() => {
     let frame = 0;
     const updateProgress = () => {
       frame = 0;
-      const pageProgress = Math.min(1, Math.max(0, window.scrollY / Math.max(1, window.innerHeight)));
-      const currentSection = pageProgress < 0.5 ? 'Home' : 'About me';
+      const scrollY = window.scrollY;
+      const vh = Math.max(1, window.innerHeight);
+
+      // Section ranges based on page layout:
+      // Home: 0 - 0.6vh
+      // About me: 0.6vh - 1.4vh
+      // Design resources: 1.4vh - 2.5vh
+      // Footer: > 2.5vh
+      let activeIndex = 0;
+      if (scrollY < 0.6 * vh) {
+        activeIndex = 0;
+      } else if (scrollY < 1.4 * vh) {
+        activeIndex = 1;
+      } else if (scrollY < 2.5 * vh) {
+        activeIndex = 2;
+      } else {
+        activeIndex = 3;
+      }
+
+      const currentSection = SECTIONS[activeIndex];
       const rail = sectionRailRef.current;
       if (rail) {
         if (rail.dataset.interacting !== 'true') {
           rail.setAttribute('aria-label', `Current section: ${currentSection}`);
-          rail.style.setProperty('--rail-label-y', `${rail.clientHeight * pageProgress}px`);
+          const tickRatio = activeIndex / (SECTIONS.length - 1);
+          rail.style.setProperty('--rail-label-y', `${rail.clientHeight * tickRatio}px`);
           const label = rail.querySelector('.rail-section-name');
           if (label) label.textContent = currentSection;
         }
-        const activeTick = pageProgress < 0.5 ? 0 : 1;
         rail.querySelectorAll('.rail-tick').forEach((tick, index) => {
-          tick.classList.toggle('is-active', index === activeTick);
-          if (index === activeTick) tick.setAttribute('aria-current', 'location');
+          tick.classList.toggle('is-active', index === activeIndex);
+          if (index === activeIndex) tick.setAttribute('aria-current', 'location');
           else tick.removeAttribute('aria-current');
         });
       }
+
+      const pageProgress = Math.min(1, Math.max(0, scrollY / vh));
       document.documentElement.style.setProperty('--scroll-progress', pageProgress);
 
       // About me reveals as hero fades
@@ -237,7 +259,13 @@ function App() {
 
       document.documentElement.style.setProperty('--about-opacity', aboutEase * (1 - aboutExit));
       document.documentElement.style.setProperty('--about-y', `${(1 - aboutEase) * 20 - aboutExit * 20}px`);
+
+      // Wash blobs smoothly fade out as hero section finishes and transitions into Design Resources
+      const rawScrollProgress = scrollY / vh;
+      const washFade = Math.min(1, Math.max(0, (rawScrollProgress - 0.6) / 0.4));
+      document.documentElement.style.setProperty('--wash-opacity', 1 - washFade);
     };
+
     const rail = sectionRailRef.current;
     const interactAt = (index) => {
       if (!rail) return;
@@ -245,7 +273,7 @@ function App() {
       const clampedIndex = Math.max(0, Math.min(ticks.length - 1, index));
       rail.dataset.interacting = 'true';
       const label = rail.querySelector('.rail-section-name');
-      const section = clampedIndex === 0 ? 'Home' : 'About me';
+      const section = SECTIONS[clampedIndex];
       rail.setAttribute('aria-label', `Section: ${section}`);
       rail.style.setProperty('--rail-label-y', `${rail.clientHeight * clampedIndex / Math.max(1, ticks.length - 1)}px`);
       if (label) label.textContent = section;
@@ -256,37 +284,47 @@ function App() {
         tick.classList.toggle('is-far', distance === 2);
       });
     };
+
     const onRailPointerMove = (event) => {
       rail.dataset.clicked = 'false';
       const rect = rail.getBoundingClientRect();
       const ratio = Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height));
-      interactAt(Math.round(ratio));
+      interactAt(Math.round(ratio * (SECTIONS.length - 1)));
     };
+
     const clearRailInteraction = () => {
       if (rail.contains(document.activeElement) && document.activeElement.classList.contains('rail-tick')) return;
       rail.dataset.interacting = 'false';
       rail.querySelectorAll('.rail-tick').forEach((tick) => tick.classList.remove('is-hovered', 'is-near', 'is-far'));
       updateProgress();
     };
+
     const onRailFocus = (event) => {
       rail.dataset.clicked = 'false';
       const focusedTick = event.target.closest('.rail-tick');
       if (focusedTick) {
         interactAt(Number(focusedTick.dataset.sectionIndex));
-        return;
       }
-      const progress = Math.min(1, Math.max(0, window.scrollY / Math.max(1, window.innerHeight)));
-      interactAt(progress < 0.5 ? 0 : 1);
     };
+
     const onRailClick = (event) => {
       const clickedTick = event.target.closest('.rail-tick');
       if (!clickedTick) return;
-      const sectionStops = [0, 0.95];
       const sectionIndex = Number(clickedTick.dataset.sectionIndex);
       rail.dataset.clicked = 'true';
       clickedTick.blur();
       clearRailInteraction();
-      window.scrollTo({ top: sectionStops[sectionIndex] * window.innerHeight, behavior: 'smooth' });
+
+      const vh = window.innerHeight;
+      if (sectionIndex === 0) {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } else if (sectionIndex === 1) {
+        window.scrollTo({ top: 0.95 * vh, behavior: 'smooth' });
+      } else if (sectionIndex === 2) {
+        document.getElementById('work')?.scrollIntoView({ behavior: 'smooth' });
+      } else if (sectionIndex === 3) {
+        document.querySelector('.footer-panel')?.scrollIntoView({ behavior: 'smooth' });
+      }
     };
     const onRailFocusOut = (event) => {
       if (event.relatedTarget && rail.contains(event.relatedTarget)) return;
@@ -323,7 +361,7 @@ function App() {
       <div className="wash wash-lilac" />
       <nav className="section-rail" ref={sectionRailRef} aria-label="Section navigation">
         <div className="rail-ticks">
-          {['Home', 'About me'].map((section, index) => (
+          {SECTIONS.map((section, index) => (
             <button className="rail-tick" data-section-index={index} aria-label={`Go to ${section}`} key={section} />
           ))}
         </div>
